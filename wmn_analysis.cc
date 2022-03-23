@@ -2,7 +2,10 @@
 //  wmn_analysis.cpp
 //  
 //
-//  Created by Mohammed Shuhad on 21/03/22.
+//  Course : ENSC 833 (Network Protocols), 
+//  Final Project : Analysiss of Wireless Mesh Networks
+//  Group 4 : Mohammed Shuhad and Mary Joseph 
+//  Created on : 21/03/22.
 //
 
 #include "wmn_analysis.hpp"

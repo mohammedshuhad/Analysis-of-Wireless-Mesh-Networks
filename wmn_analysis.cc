@@ -8,16 +8,6 @@
 //  Created on : 21/03/22.
 //
 
-//
-//  wmn_analysis.cpp
-//  
-//
-//  Course : ENSC 833 (Network Protocols), 
-//  Final Project : Analysiss of Wireless Mesh Networks
-//  Group 4 : Mohammed Shuhad and Mary Joseph 
-//  Created on : 21/03/22.
-//
-
 #include "wmn_analysis.hpp"
 static void
 SetPosition (Ptr<Node> node, double x, double y)
@@ -458,9 +448,9 @@ main (int argc, char *argv[])
   ns3::PacketMetadata::Enable ();
   LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
   LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
-  MeshExperiment t(std::string("OLSR"));
-  // shd t.Configure (argc, argv);
-  return t.Run ();
+  MeshExperiment olsrTest(std::string("OLSR"));
+  olsrTest.Run();
+  MeshExperiment aodvTest(std::string("AODV"));
+  aodvTest.Run();
+  return 0;
 }
-
-

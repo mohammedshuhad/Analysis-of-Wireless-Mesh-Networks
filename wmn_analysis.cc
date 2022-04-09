@@ -8,6 +8,16 @@
 //  Created on : 21/03/22.
 //
 
+//
+//  wmn_analysis.cpp
+//  
+//
+//  Course : ENSC 833 (Network Protocols), 
+//  Final Project : Analysiss of Wireless Mesh Networks
+//  Group 4 : Mohammed Shuhad and Mary Joseph 
+//  Created on : 21/03/22.
+//
+
 #include "wmn_analysis.hpp"
 static void
 SetPosition (Ptr<Node> node, double x, double y)
@@ -19,12 +29,13 @@ SetPosition (Ptr<Node> node, double x, double y)
   mobility->SetPosition (pos);
 }
 
-MeshExperiment::MeshExperiment () :
+MeshExperiment::MeshExperiment (std::string prot) :
+m_routingProtocol (prot),
 m_xSize (2),
 m_ySize (2),
 m_step (40.0),
 m_randomStart (0.1),
-m_totalTime (40.0),
+m_totalTime (30.0),
 m_packetInterval (1.0),
 m_packetSize (1024),
 m_nIfaces (1),
@@ -294,20 +305,18 @@ MeshExperiment::SetupMobility ()
   //Simulator::Schedule (Seconds (20.0), &SetPosition, nc_sta2.Get (0), 0.0, 0.0);
 }
 void
-MeshExperiment::InstallInternetStack (RoutingProt protocol)
+MeshExperiment::InstallInternetStack ()
 {
   InternetStackHelper internetStackHelper;
   OlsrHelper olsrHelper;
   AodvHelper aodvHelper;
   DsdvHelper dsdvHelper;
 
-  switch(protocol)
-  {
-    case OLSR  : internetStackHelper.SetRoutingHelper (olsrHelper);   break;
-    case AODV: internetStackHelper.SetRoutingHelper (aodvHelper); break;
-    case DSDV : internetStackHelper.SetRoutingHelper (dsdvHelper); break;
-    default : std::cout << "Unrecognized routing\n"; break;
-    }
+
+  if(m_routingProtocol == "OLSR") internetStackHelper.SetRoutingHelper (olsrHelper);
+  else if (m_routingProtocol == "AODV") internetStackHelper.SetRoutingHelper (aodvHelper);
+  else if (m_routingProtocol == "DSDV") internetStackHelper.SetRoutingHelper (dsdvHelper);
+  else std::cout << "Unrecognized routing\n";
 
   internetStackHelper.Install (nc_sta1);
   internetStackHelper.Install (nc_sta2);
@@ -339,6 +348,8 @@ MeshExperiment::InstallInternetStack (RoutingProt protocol)
   if_mesh2 = address.Assign (de_mesh2);
   address.SetBase ("20.1.4.0", "255.255.255.0");
   if_p2p_gw2Bb1 = address.Assign (de_p2p_gw2Bb1);
+
+  //Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 }
 void
 MeshExperiment::InstallApplication ()
@@ -356,62 +367,69 @@ MeshExperiment::InstallApplication ()
   ApplicationContainer clientApps = echoClient.Install (nc_sta1.Get (0));
   clientApps.Start (Seconds (0.0));
   clientApps.Stop (Seconds (m_totalTime));
-  //Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
+  // Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 }
 int
 MeshExperiment::Run ()
 {
   CreateNodes ();
   SetupChannels();
-  InstallInternetStack (OLSR);
+  InstallInternetStack ();
   SetupMobility ();
   InstallApplication ();
-  //Gnuplot parameters
-  std::string fileNameWithNoExtension = "FlowVSThroughput_ft_";
-  std::string graphicsFileName = fileNameWithNoExtension + ".png";
-  std::string plotFileName = fileNameWithNoExtension + ".plt";
-  std::string plotTitle = "Flow vs Throughput";
-  std::string dataTitle = "Throughput";
-  // Instantiate the plot and set its title.
-  Gnuplot gnuplot (graphicsFileName);
-  gnuplot.SetTitle (plotTitle);
-  // Make the graphics file, which the plot file will be when it
-  // is used with Gnuplot, be a PNG file.
-  gnuplot.SetTerminal ("png");
-  // Set the labels for each axis.
-  gnuplot.SetLegend ("Flow", "Throughput");
-  Gnuplot2dDataset dataset;
-  dataset.SetTitle (dataTitle);
-  dataset.SetStyle (Gnuplot2dDataset::LINES_POINTS);
-  //flowMonitor declaration
+
+  m_dataSets.push_back(Plotter("Throughput", m_routingProtocol));
+  m_dataSets.push_back(Plotter("Packet Delivery Fraction", m_routingProtocol));
+  m_dataSets.push_back(Plotter("end-to-end Delay", m_routingProtocol));
+
+  // std::string fileNameWithNoExtension = dataTitle + "_" + m_routingProtocol;
+  // std::string graphicsFileName = fileNameWithNoExtension + ".png";
+  // std::string plotFileName = fileNameWithNoExtension + ".plt";
+  // std::string plotTitle = "Time vs" + dataTitle;
+  
+  // Gnuplot2dDataset dataset;
+  // dataset.SetTitle (dataTitle);
+  // dataset.SetStyle (Gnuplot2dDataset::LINES_POINTS);
+
   FlowMonitorHelper fmHelper;
   Ptr<FlowMonitor> allMon = fmHelper.InstallAll ();
-  // call the flow monitor function
-  ThroughputMonitor (&fmHelper, allMon, dataset);
+  ThroughputMonitor (&fmHelper, allMon, m_dataSets);
   Simulator::Stop (Seconds (m_totalTime));
-  // Enable graphical interface for netanim
+
   AnimationInterface animation ("infrastructure-mesh-backbone.xml");
   animation.EnablePacketMetadata (false);
   Simulator::Run ();
-  //Gnuplot ...continued
-  gnuplot.AddDataset (dataset);
-  // Open the plot file.
-  std::ofstream plotFile (plotFileName.c_str ());
-  // Write the plot file.
-  gnuplot.GenerateOutput (plotFile);
-  // Close the plot file.
-  plotFile.close ();
+
+  makeGnuPlots();
+
   Simulator::Destroy ();
+
   return 0;
 }
+void MeshExperiment::makeGnuPlots()
+{
+  for(auto& data : m_dataSets)
+  {
+  Gnuplot gnuplot (data.graphicsFileName);
+  gnuplot.SetTitle (data.plotTitle);
+  gnuplot.SetTerminal ("png");
+  gnuplot.SetLegend ("Time", data.dataTitle.c_str());
+  gnuplot.AddDataset (data.dataset);
+  std::ofstream plotFile (data.plotFileName.c_str ());
+  gnuplot.GenerateOutput (plotFile);
+  plotFile.close ();
+  }
+}
 void
-ThroughputMonitor (FlowMonitorHelper *fmhelper, Ptr<FlowMonitor> flowMon, Gnuplot2dDataset DataSet)
+ThroughputMonitor (FlowMonitorHelper *fmhelper, Ptr<FlowMonitor> flowMon, std::vector<Plotter>& dataSets)
 {
   double localThrou = 0;
   std::map<FlowId, FlowMonitor::FlowStats> flowStats = flowMon->GetFlowStats ();
   Ptr<Ipv4FlowClassifier> classing = DynamicCast<Ipv4FlowClassifier> (fmhelper->GetClassifier ());
   for (std::map<FlowId, FlowMonitor::FlowStats>::const_iterator stats = flowStats.begin (); stats != flowStats.end (); ++stats)
     {
+      if(stats->first == 1 /*|| stats->first == 11*/)
+      {
       Ipv4FlowClassifier::FiveTuple fiveTuple = classing->FindFlow (stats->first);
       std::cout << "Flow ID     : " << stats->first << " ; " << fiveTuple.sourceAddress << " -----> " << fiveTuple.destinationAddress << std::endl;
       std::cout << "Tx Packets = " << stats->second.txPackets << std::endl;
@@ -419,12 +437,16 @@ ThroughputMonitor (FlowMonitorHelper *fmhelper, Ptr<FlowMonitor> flowMon, Gnuplo
       std::cout << "Duration    : " << (stats->second.timeLastRxPacket.GetSeconds () - stats->second.timeFirstTxPacket.GetSeconds ()) << std::endl;
       std::cout << "Last Received Packet  : " << stats->second.timeLastRxPacket.GetSeconds () << " Seconds" << std::endl;
       std::cout << "Throughput: " << stats->second.rxBytes * 8.0 / (stats->second.timeLastRxPacket.GetSeconds () - stats->second.timeFirstTxPacket.GetSeconds ()) / 1024 / 1024 << " Mbps" << std::endl;
+      std::cout << "lostPackets : " << stats->second.lostPackets << "\n";
       localThrou = (stats->second.rxBytes * 8.0 / (stats->second.timeLastRxPacket.GetSeconds () - stats->second.timeFirstTxPacket.GetSeconds ()) / 1024 / 1024);
       // updata gnuplot data
-      DataSet.Add ((double) Simulator::Now ().GetSeconds (), (double) localThrou);
+      dataSets[0].dataset.Add ((double) Simulator::Now ().GetSeconds (), (double) localThrou);
+      dataSets[1].dataset.Add ((double) Simulator::Now ().GetSeconds (), (double) stats->second.rxPackets/stats->second.txPackets);
+      dataSets[2].dataset.Add ((double) Simulator::Now ().GetSeconds (), (double) stats->second.delaySum.GetSeconds ()/stats->second.rxPackets);
       std::cout << "---------------------------------------------------------------------------" << std::endl;
+      }
     }
-  Simulator::Schedule (Seconds (1), &ThroughputMonitor, fmhelper, flowMon, DataSet);
+  Simulator::Schedule (Seconds (1), &ThroughputMonitor, fmhelper, flowMon, dataSets);
   //if(flowToXml)
   {
     flowMon->SerializeToXmlFile ("infrastructure-mesh-backbone-throughputMonitor.xml", true, true);
@@ -436,7 +458,9 @@ main (int argc, char *argv[])
   ns3::PacketMetadata::Enable ();
   LogComponentEnable ("UdpEchoClientApplication", LOG_LEVEL_INFO);
   LogComponentEnable ("UdpEchoServerApplication", LOG_LEVEL_INFO);
-  MeshExperiment t;
+  MeshExperiment t(std::string("OLSR"));
   // shd t.Configure (argc, argv);
   return t.Run ();
 }
+
+

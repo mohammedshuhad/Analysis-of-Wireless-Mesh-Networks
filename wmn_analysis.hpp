@@ -41,19 +41,40 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <vector>
 using namespace ns3;
 NS_LOG_COMPONENT_DEFINE ("infrastructure-mesh");
-void ThroughputMonitor (FlowMonitorHelper *fmhelper, Ptr<FlowMonitor> flowMon, Gnuplot2dDataset DataSet);
 // Method for setting mobility using (x,y) position for the nodes
 static void
 SetPosition (Ptr<Node> node, double x, double y);
+struct Plotter
+{
+    Plotter(std::string DataTitle, std::string routingProtocol)
+    {
+        dataTitle = DataTitle;
+        fileNameWithNoExtension = dataTitle + "_" + routingProtocol;
+        graphicsFileName = fileNameWithNoExtension + ".png";
+        plotFileName = fileNameWithNoExtension + ".plt";
+        plotTitle = "Time vs" + dataTitle;
+        dataset.SetTitle (dataTitle);
+        dataset.SetStyle (Gnuplot2dDataset::LINES_POINTS);
+    };
+    std::string dataTitle;
+    std::string fileNameWithNoExtension;
+    std::string graphicsFileName;
+    std::string plotFileName;
+    std::string plotTitle;
+    Gnuplot2dDataset dataset;
+};
+void ThroughputMonitor (FlowMonitorHelper *fmhelper, Ptr<FlowMonitor> flowMon, std::vector<Plotter>& dataSets);
 class MeshExperiment
 {
 public:
-    MeshExperiment();
+    MeshExperiment(std::string prot);
     int Run();
+    std::vector<Plotter> m_dataSets;
 private:
-enum RoutingProt { OLSR, AODV, DSDV };
+    std::string m_routingProtocol;
     int m_xSize;
     int m_ySize;
     double m_step;
@@ -122,10 +143,11 @@ enum RoutingProt { OLSR, AODV, DSDV };
     
     void SetupChannels();
     void CreateNodes();
-    void InstallInternetStack(RoutingProt prot);
+    void InstallInternetStack();
     void SetupMobility();
     void InstallApplication();
     void Report();
+    void makeGnuPlots();
 };
 
 #endif /* wmn_analysis_hpp */
